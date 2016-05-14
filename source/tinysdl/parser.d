@@ -168,7 +168,7 @@ string readIdentifier(Context ctx) {
 Value readValue(Context ctx) {
   int initialChar = ctx.currentCharacter();
   switch (initialChar) {
-    case '0': .. case '9':
+    case '0': .. case '9': case '-': case '+': case '.':
       return ctx.readNumber();
     case '"':
       return ctx.readString();
@@ -305,6 +305,7 @@ bool atBeginningOfIdentifier(Context ctx) {
 bool atBeginningOfValue(Context ctx) {
   int initialChar = ctx.currentCharacter();
   return initialChar == '"' || initialChar.isMember(CharSet.Num) ||
+      initialChar == '+' || initialChar == '-' || initialChar == '.' ||
       ctx.atBeginningOfBooleanLiteral();
 }
 
