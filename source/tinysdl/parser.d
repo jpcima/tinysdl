@@ -7,25 +7,26 @@ import std.string: format;
 import std.range: popBack;
 import std.conv: to;
 
-Tag parse(string sourceText) {
-  source = sourceText;
-  position = 0;
-  line = 1;
-  column = 1;
+Tag parse(string source) {
+  Context ctx = new Context;
+  ctx.source = source;
 
   Tag root = new Tag;
-  root.children = readListOfTags();
+  root.children = ctx.readListOfTags();
 
-  assert(atEndOfFile());
+  assert(ctx.atEndOfFile());
   return root;
 }
 
 private:
 
-string source;
-uint position;
-uint line;
-uint column;
+final class Context {
+  string source;
+  uint position = 0;
+  uint line = 1;
+  uint column = 1;
+  uint[] position_stack;
+}
 
 const int EOFCharacter = -1;
 
@@ -38,185 +39,183 @@ enum CharSet {
   AlphaNum = Alpha|Num,
 };
 
-uint[] position_stack;
-
-void pushPosition() {
-  position_stack ~= [line, column, position];
+void pushPosition(Context ctx) {
+  ctx.position_stack ~= [ctx.line, ctx.column, ctx.position];
 }
 
-void popPosition() {
-  line = position_stack[$-3];
-  column = position_stack[$-2];
-  position = position_stack[$-1];
-  discardPosition();
+void popPosition(Context ctx) {
+  ctx.line = ctx.position_stack[$-3];
+  ctx.column = ctx.position_stack[$-2];
+  ctx.position = ctx.position_stack[$-1];
+  ctx.discardPosition();
 }
 
-void discardPosition() {
-  position_stack = position_stack[0..$-3];
+void discardPosition(Context ctx) {
+  ctx.position_stack = ctx.position_stack[0..$-3];
 }
 
-Tag[] readListOfTags() {
+Tag[] readListOfTags(Context ctx) {
   Tag[] list;
-  for (Tag tag; (tag = maybeReadTag()) !is null;)
+  for (Tag tag; (tag = ctx.maybeReadTag()) !is null;)
     list ~= tag;
   return list;
 }
 
-Tag maybeReadTag() {
-  skipEmptyLines();
+Tag maybeReadTag(Context ctx) {
+  ctx.skipEmptyLines();
 
-  if (atEndOfFile())
+  if (ctx.atEndOfFile())
     return null;
 
   Tag tag = new Tag;
-  if (atBeginningOfIdentifier()) {
-    tag.name = readIdentifier();
-    if (currentCharacter() == ':') {
-      skip();
-      tag.name = tag.name ~ ':' ~ readIdentifier();
+  if (ctx.atBeginningOfIdentifier()) {
+    tag.name = ctx.readIdentifier();
+    if (ctx.currentCharacter() == ':') {
+      ctx.skip();
+      tag.name = tag.name ~ ':' ~ ctx.readIdentifier();
     }
   } else
     tag.name = "";
 
   uint nthItem = 0;
   for (bool endOfTag = false; !endOfTag; ++nthItem) {
-    uint countWs = skipMembers(CharSet.SpaceTab);
-    int c = currentCharacter();
+    uint countWs = ctx.skipMembers(CharSet.SpaceTab);
+    int c = ctx.currentCharacter();
     if (c == EOFCharacter) {
       endOfTag = true;
 
-    } else if (atBeginningOfValue()) {
+    } else if (ctx.atBeginningOfValue()) {
       if (countWs == 0 && !(nthItem == 0 && tag.name == ""))
-        raiseUnexpectedCharacter();
-      tag.values ~= readValue();
+        ctx.raiseUnexpectedCharacter();
+      tag.values ~= ctx.readValue();
 
-    } else if (atBeginningOfIdentifier()) {
+    } else if (ctx.atBeginningOfIdentifier()) {
       if (countWs == 0 && !(nthItem == 0 && tag.name == ""))
-        raiseUnexpectedCharacter();
-      tag.attributes ~= readAttribute();
+        ctx.raiseUnexpectedCharacter();
+      tag.attributes ~= ctx.readAttribute();
 
     } else if (c == '\r' || c == '\n') {
       endOfTag = true;
-      if (!maybeConsumeNewline)
-        raiseParsingError("expected newline");
+      if (!ctx.maybeConsumeNewline)
+        ctx.raiseParsingError("expected newline");
 
     } else if (c == ';') {
       endOfTag = true;
-      skip();
-      maybeConsumeNewline();
+      ctx.skip();
+      ctx.maybeConsumeNewline();
 
     } else if (c == '{') {
       if (countWs == 0 && !(nthItem == 0 && tag.name == ""))
-        raiseUnexpectedCharacter();
+        ctx.raiseUnexpectedCharacter();
 
       endOfTag = true;
-      skip();
-      if (!maybeConsumeNewline())
-        raiseParsingError("expected a new line following '{'");
+      ctx.skip();
+      if (!ctx.maybeConsumeNewline())
+        ctx.raiseParsingError("expected a new line following '{'");
 
       do {
-        skipEmptyLines();
-        c = currentCharacter();
+        ctx.skipEmptyLines();
+        c = ctx.currentCharacter();
         if (c == '}') {
-          skip();
+          ctx.skip();
         } else {
-          pushPosition();
-          scope(success) discardPosition();
+          ctx.pushPosition();
+          scope(success) ctx.discardPosition();
 
-          Tag child = maybeReadTag();
+          Tag child = ctx.maybeReadTag();
           if (child is null) {
-            popPosition();
-            raiseParsingError("expected tag");
+            ctx.popPosition();
+            ctx.raiseParsingError("expected tag");
           }
           tag.children ~= child;
         }
       } while (c != '}');
 
-      if (!maybeConsumeNewline())
-        raiseParsingError("expected a new line following '}'");
+      if (!ctx.maybeConsumeNewline())
+        ctx.raiseParsingError("expected a new line following '}'");
     } else {
-      raiseUnexpectedCharacter();
+      ctx.raiseUnexpectedCharacter();
     }
   }
 
   return tag;
 }
 
-bool maybeConsumeNewline() {
-  skipMembers(CharSet.SpaceTab);
-  if (currentCharacter == '\n') {
-    skip();
-  } else if (currentCharacter == '\r' &&
-             characterAt(position + 1) == '\n') {
-    skip(2);
+bool maybeConsumeNewline(Context ctx) {
+  ctx.skipMembers(CharSet.SpaceTab);
+  if (ctx.currentCharacter() == '\n') {
+    ctx.skip();
+  } else if (ctx.currentCharacter() == '\r' &&
+             ctx.characterAt(ctx.position + 1) == '\n') {
+    ctx.skip(2);
   } else {
     return false;
   }
   return true;
 }
 
-void skipEmptyLines() {
-  do { skipMembers(CharSet.SpaceTab); }
-  while (maybeConsumeNewline());
+void skipEmptyLines(Context ctx) {
+  do { ctx.skipMembers(CharSet.SpaceTab); }
+  while (ctx.maybeConsumeNewline());
 }
 
-string readIdentifier() {
-  if (!atBeginningOfIdentifier())
-    raiseUnexpectedCharacterForItem("identifier");
-  return collectMembers(CharSet.AlphaNum);
+string readIdentifier(Context ctx) {
+  if (!ctx.atBeginningOfIdentifier())
+    ctx.raiseUnexpectedCharacterForItem("identifier");
+  return ctx.collectMembers(CharSet.AlphaNum);
 }
 
-Value readValue() {
-  int initialChar = currentCharacter;
+Value readValue(Context ctx) {
+  int initialChar = ctx.currentCharacter();
   switch (initialChar) {
     case '0': .. case '9':
-      return readNumber();
+      return ctx.readNumber();
     case '"':
-      return readString();
+      return ctx.readString();
     default: {
-      Value v = maybeReadBoolean();
+      Value v = ctx.maybeReadBoolean();
       if (v)
         return v;
-      raiseParsingError("expected value");
+      ctx.raiseParsingError("expected value");
     }
   }
   assert(0);
 }
 
-Value readNumber() {
-  uint startpos = position;
+Value readNumber(Context ctx) {
+  uint startpos = ctx.position;
 
-  switch (currentCharacter()) {
-    case '+': case '-': skip(); break;
+  switch (ctx.currentCharacter()) {
+    case '+': case '-': ctx.skip(); break;
     default:
   }
 
-  uint countBeforePoint = skipMembers(CharSet.Num);
+  uint countBeforePoint = ctx.skipMembers(CharSet.Num);
   uint countAfterPoint = 0;
-  if (currentCharacter() == '.') {
-    skip();
-    countAfterPoint = skipMembers(CharSet.Num);
+  if (ctx.currentCharacter() == '.') {
+    ctx.skip();
+    countAfterPoint = ctx.skipMembers(CharSet.Num);
   }
 
   if (countBeforePoint + countAfterPoint == 0)
-    raiseParsingError("invalid number value");
+    ctx.raiseParsingError("invalid number value");
 
-  switch (currentCharacter()) {
+  switch (ctx.currentCharacter()) {
     case 'e': case 'E':
-      skip();
-      switch (currentCharacter()) {
+      ctx.skip();
+      switch (ctx.currentCharacter()) {
         case '+': case '-':
-          skip();
+          ctx.skip();
           break;
         default:
       }
-      if (skipMembers(CharSet.Num) == 0)
-        raiseParsingError("invalid number value");
+      if (ctx.skipMembers(CharSet.Num) == 0)
+        ctx.raiseParsingError("invalid number value");
       break;
     default:
   }
 
-  string valueText = source[startpos..position];
+  string valueText = ctx.source[startpos..ctx.position];
   double valueNum = valueText.to!double;
 
   Value v = new Value;
@@ -225,18 +224,18 @@ Value readNumber() {
   return v;
 }
 
-Value readString() {
-  if (currentCharacter() != '"')
-    raiseUnexpectedCharacterForItem("string");
-  skip();
+Value readString(Context ctx) {
+  if (ctx.currentCharacter() != '"')
+    ctx.raiseUnexpectedCharacterForItem("string");
+  ctx.skip();
 
   string valueString;
-  for (int c; (c = currentCharacter()) != '"'; skip()) {
+  for (int c; (c = ctx.currentCharacter()) != '"'; ctx.skip()) {
     if (c == EOFCharacter) {
-      raiseParsingError("premature end of string");
+      ctx.raiseParsingError("premature end of string");
     } else if (c == '\\') {
-      skip();
-      c = currentCharacter();
+      ctx.skip();
+      c = ctx.currentCharacter();
       switch (c) {
         case '0': valueString ~= '\0'; break;
         case 'a': valueString ~= '\a'; break;
@@ -253,7 +252,7 @@ Value readString() {
       valueString ~= c;
     }
   }
-  skip();
+  ctx.skip();
 
   Value v = new Value;
   v.kind = ValueKind.Text;
@@ -261,101 +260,101 @@ Value readString() {
   return v;
 }
 
-Attribute readAttribute() {
-  string name = readIdentifier();
-  if (currentCharacter() == ':') {
-    skip();
-    name = name ~ ':' ~ readIdentifier();
+Attribute readAttribute(Context ctx) {
+  string name = ctx.readIdentifier();
+  if (ctx.currentCharacter() == ':') {
+    ctx.skip();
+    name = name ~ ':' ~ ctx.readIdentifier();
   }
-  if (currentCharacter() != '=') {
-    raiseParsingError("expected '=' after attribute name, got %s",
-                      currentCharacter().characterRepresentation);
+  if (ctx.currentCharacter() != '=') {
+    ctx.raiseParsingError("expected '=' after attribute name, got %s",
+                      ctx.currentCharacter().characterRepresentation);
   }
-  skip();
+  ctx.skip();
 
-  Value value = readValue();
+  Value value = ctx.readValue();
   Attribute attr = new Attribute;
   attr.name = name;
   attr.value = value;
   return attr;
 }
 
-Value maybeReadBoolean() {
+Value maybeReadBoolean(Context ctx) {
   Value v = null;
-  if (atBeginningOfSymbol("true")) {
+  if (ctx.atBeginningOfSymbol("true")) {
     v = new Value;
     v.kind = ValueKind.Boolean;
     v.value.boolean = true;
-    skip(4);
+    ctx.skip(4);
     return v;
-  } else if (atBeginningOfSymbol("false")) {
+  } else if (ctx.atBeginningOfSymbol("false")) {
     v = new Value;
     v.kind = ValueKind.Boolean;
     v.value.boolean = false;
-    skip(5);
+    ctx.skip(5);
     return v;
   }
   return v;
 }
 
-bool atBeginningOfIdentifier() {
-  int initialChar = currentCharacter();
+bool atBeginningOfIdentifier(Context ctx) {
+  int initialChar = ctx.currentCharacter();
   return initialChar.isMember(CharSet.Alpha);
 }
 
-bool atBeginningOfValue() {
-  int initialChar = currentCharacter();
+bool atBeginningOfValue(Context ctx) {
+  int initialChar = ctx.currentCharacter();
   return initialChar == '"' || initialChar.isMember(CharSet.Num) ||
-      atBeginningOfBooleanLiteral();
+      ctx.atBeginningOfBooleanLiteral();
 }
 
-bool atBeginningOfBooleanLiteral() {
-  return atBeginningOfSymbol("true") || atBeginningOfSymbol("false");
+bool atBeginningOfBooleanLiteral(Context ctx) {
+  return ctx.atBeginningOfSymbol("true") || ctx.atBeginningOfSymbol("false");
 }
 
-bool atBeginningOfSymbol(string ident) {
-  string sourceFrom = source[position..$];
+bool atBeginningOfSymbol(Context ctx, string ident) {
+  string sourceFrom = ctx.source[ctx.position..$];
   return sourceFrom.length >= ident.length &&
       sourceFrom[0..ident.length] == ident &&
       (sourceFrom.length == ident.length ||
        !sourceFrom[ident.length].isMember(CharSet.AlphaNum));
 }
 
-int characterAt(uint index) {
-  if (index >= source.length)
+int characterAt(Context ctx, uint index) {
+  if (index >= ctx.source.length)
     return EOFCharacter;
-  return source[index];
+  return ctx.source[index];
 }
 
-int currentCharacter() {
-  return characterAt(position);
+int currentCharacter(Context ctx) {
+  return ctx.characterAt(ctx.position);
 }
 
-bool atEndOfFile() {
-  return currentCharacter() == EOFCharacter;
+bool atEndOfFile(Context ctx) {
+  return ctx.currentCharacter() == EOFCharacter;
 }
 
-string collectMembers(int set) {
+string collectMembers(Context ctx, int set) {
   uint n = 0;
-  for (; currentCharacter().isMember(set); ++n)
-    skip();
-  return source[position-n..position];
+  for (; ctx.currentCharacter().isMember(set); ++n)
+    ctx.skip();
+  return ctx.source[ctx.position - n..ctx.position];
 }
 
-uint skipMembers(int set) {
-  return cast(uint)collectMembers(set).length;
+uint skipMembers(Context ctx, int set) {
+  return cast(uint)ctx.collectMembers(set).length;
 }
 
-void skip(uint n = 1) {
+void skip(Context ctx, uint n = 1) {
   while (n-- > 0) {
-    assert(position < source.length);
-    if (currentCharacter() == '\n') {
-      ++line;
-      column = 1;
+    assert(ctx.position < ctx.source.length);
+    if (ctx.currentCharacter() == '\n') {
+      ++ctx.line;
+      ctx.column = 1;
     } else {
-      ++column;
+      ++ctx.column;
     }
-    ++position;
+    ++ctx.position;
   }
 }
 
@@ -373,19 +372,20 @@ bool isMember(int c, int set) {
   return res;
 }
 
-void raiseParsingError(A...)(string fmt, A args) {
-  string msg = format("at line %d, column %d: " ~ fmt, line, column, args);
+void raiseParsingError(A...)(Context ctx, string fmt, A args) {
+  string msg = format("at line %d, column %d: " ~ fmt,
+                      ctx.line, ctx.column, args);
   throw new ParsingError(msg);
 }
 
-void raiseUnexpectedCharacter() {
-  raiseParsingError("unexpected character %s",
-                    currentCharacter().characterRepresentation);
+void raiseUnexpectedCharacter(Context ctx) {
+  ctx.raiseParsingError("unexpected character %s",
+                        ctx.currentCharacter().characterRepresentation);
 }
 
-void raiseUnexpectedCharacterForItem(string itemName) {
-  raiseParsingError("expected %s, got %s",
-                    itemName, currentCharacter().characterRepresentation);
+void raiseUnexpectedCharacterForItem(Context ctx, string itemName) {
+  ctx.raiseParsingError("expected %s, got %s", itemName,
+                        ctx.currentCharacter().characterRepresentation);
 }
 
 string characterRepresentation(int character) {
