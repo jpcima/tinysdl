@@ -1,0 +1,5 @@
+name "tinysdl"
+description "A tiny SDLang parsing library"
+copyright "Copyright © 2016, JP Cimalando"
+authors "JP Cimalando"
+targetType "library"
