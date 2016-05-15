@@ -131,7 +131,7 @@ Tag maybeReadTag(Context ctx) {
         }
       } while (c != '}');
 
-      if (!ctx.maybeConsumeNewline())
+      if (!ctx.maybeConsumeNewline() && ctx.currentCharacter() != EOFCharacter)
         ctx.raiseParsingError("expected a new line following '}'");
     } else {
       ctx.raiseUnexpectedCharacter();
