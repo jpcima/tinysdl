@@ -36,6 +36,20 @@ auto children(Tag t, string name) {
   return t.children.filter!(c => c.name == name)();
 }
 
+Value value(Tag t, uint index) {
+  Value v = valueOrNull(t, index);
+  if (v is null)
+    throw new ValueError(
+        format("the tag has no value with the index %d", index));
+  return v;
+}
+
+Value valueOrNull(Tag t, uint index) {
+  if (index >= t.values.length)
+    return null;
+  return t.values[index];
+}
+
 Attribute attribute(Tag t, string name) {
   Attribute attr = attributeOrNull(t, name);
   if (attr is null)
