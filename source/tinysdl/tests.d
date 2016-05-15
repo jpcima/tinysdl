@@ -73,6 +73,26 @@ unittest {
     assert(doc.child(0).attributes.length == 1);
     assert(doc.child(0).attributes[0].name == "b-_.$:c-_.$");
   }
+
+  // number forms
+  assert(parse(`1`).child(0).value(0).asNumber == 1);
+  assert(parse(`1.`).child(0).value(0).asNumber == 1);
+  assert(parse(`1.1`).child(0).value(0).asNumber == 1.1);
+  assert(parse(`.1`).child(0).value(0).asNumber == 0.1);
+  assert(parse(`1e2`).child(0).value(0).asNumber == 1e2);
+  assert(parse(`1e+2`).child(0).value(0).asNumber == 1e2);
+  assert(parse(`1e-2`).child(0).value(0).asNumber == 1e-2);
+  assert(parse(`1.1e2`).child(0).value(0).asNumber == 1.1e2);
+  assert(parse(`1.1e+2`).child(0).value(0).asNumber == 1.1e2);
+  assert(parse(`1.1e-2`).child(0).value(0).asNumber == 1.1e-2);
+  assert(parse(`.1e2`).child(0).value(0).asNumber == 0.1e2);
+  assert(parse(`.1e+2`).child(0).value(0).asNumber == 0.1e2);
+  assert(parse(`.1e-2`).child(0).value(0).asNumber == 0.1e-2);
+  try { parse(`.`); assert(0); } catch (ParsingError) {}
+  try { parse(`.e1`); assert(0); } catch (ParsingError) {}
+  try { parse(`1e`); assert(0); } catch (ParsingError) {}
+  try { parse(`1e+`); assert(0); } catch (ParsingError) {}
+  try { parse(`1e-`); assert(0); } catch (ParsingError) {}
 }
 
 enum exampleDocument = `
