@@ -34,9 +34,10 @@ enum CharSet {
   Space = 0b0000_0001,
   Tab = 0b0000_0010,
   SpaceTab = Space|Tab,
-  Alpha = 0b0000_1000,
-  Num = 0b0001_0000,
+  Alpha = 0b0000_0100,
+  Num = 0b0000_1000,
   AlphaNum = Alpha|Num,
+  IdentifierExtra = 0b0001_0000,
 };
 
 void pushPosition(Context ctx) {
@@ -162,7 +163,7 @@ void skipEmptyLines(Context ctx) {
 string readIdentifier(Context ctx) {
   if (!ctx.atBeginningOfIdentifier())
     ctx.raiseUnexpectedCharacterForItem("identifier");
-  return ctx.collectMembers(CharSet.AlphaNum);
+  return ctx.collectMembers(CharSet.AlphaNum|CharSet.IdentifierExtra);
 }
 
 Value readValue(Context ctx) {
@@ -370,6 +371,8 @@ bool isMember(int c, int set) {
           (c >= 'A' && c <= 'Z');
   if (!res && (set & CharSet.Num))
     res = c >= '0' && c <= '9';
+  if (!res && (set & CharSet.IdentifierExtra))
+    res = c == '-' || c == '_' || c == '.' || c == '$';
   return res;
 }
 

@@ -65,6 +65,14 @@ unittest {
     Tag doc = parse(withSemicolons);
     validateExampleDocument(doc);
   }
+
+  // extra identifier characters
+  { enum source = `a-_.$ b-_.$:c-_.$=""`;
+    Tag doc = parse(source);
+    assert(doc.child(0).name == "a-_.$");
+    assert(doc.child(0).attributes.length == 1);
+    assert(doc.child(0).attributes[0].name == "b-_.$:c-_.$");
+  }
 }
 
 enum exampleDocument = `
