@@ -1,4 +1,4 @@
-module tinysdl.destructuring.attribute;
+module tinysdl.destructuring.attributes;
 import tinysdl.destructuring.common;
 import tinysdl.destructuring.errors;
 import tinysdl.data;
