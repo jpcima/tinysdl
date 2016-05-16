@@ -93,6 +93,12 @@ unittest {
   try { parse(`1e`); assert(0); } catch (ParsingError) {}
   try { parse(`1e+`); assert(0); } catch (ParsingError) {}
   try { parse(`1e-`); assert(0); } catch (ParsingError) {}
+
+  // unicode strings
+  assert(parse(`"Texte en français"`).child(0).value(0).asText == "Texte en français");
+  assert(parse(`"النص العربي"`).child(0).value(0).asText == "النص العربي");
+  // escape sequences in strings
+  assert(parse(`"<\\\0\a\b\t\n\v\f\r>"`).child(0).value(0).asText == "<\\\0\a\b\t\n\v\f\r>");
 }
 
 enum exampleDocument = `

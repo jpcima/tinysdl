@@ -2,10 +2,10 @@ module tinysdl.parser;
 import tinysdl.data;
 import tinysdl.errors;
 import std.stdio;
-import std.ascii: isPrintable;
 import std.string: format;
 import std.range: popBack;
 import std.conv: to;
+static import std.utf;
 
 Tag parse(string source) {
   Context ctx = new Context;
@@ -22,13 +22,13 @@ private:
 
 final class Context {
   string source;
-  uint position = 0;
-  uint line = 1;
-  uint column = 1;
-  uint[] position_stack;
+  size_t position = 0;
+  size_t line = 1;
+  size_t column = 1;
+  size_t[] position_stack;
 }
 
-const int EOFCharacter = -1;
+const dchar EOFCharacter = dchar.max;
 
 enum CharSet {
   Space = 0b0000_0001,
@@ -78,10 +78,10 @@ Tag maybeReadTag(Context ctx) {
   } else
     tag.name = "";
 
-  uint nthItem = 0;
+  size_t nthItem = 0;
   for (bool endOfTag = false; !endOfTag; ++nthItem) {
-    uint countWs = ctx.skipMembers(CharSet.SpaceTab);
-    int c = ctx.currentCharacter();
+    size_t countWs = ctx.skipMembers(CharSet.SpaceTab);
+    dchar c = ctx.currentCharacter();
     if (c == EOFCharacter) {
       endOfTag = true;
 
@@ -144,10 +144,13 @@ Tag maybeReadTag(Context ctx) {
 
 bool maybeConsumeNewline(Context ctx) {
   ctx.skipMembers(CharSet.SpaceTab);
-  if (ctx.currentCharacter() == '\n') {
+
+  dchar c;
+  size_t csize;
+  c = ctx.currentCharacter(/+ref+/csize);
+  if (c == '\n') {
     ctx.skip();
-  } else if (ctx.currentCharacter() == '\r' &&
-             ctx.characterAt(ctx.position + 1) == '\n') {
+  } else if (c == '\r' && ctx.characterAt(ctx.position + csize) == '\n') {
     ctx.skip(2);
   } else {
     return false;
@@ -167,7 +170,7 @@ string readIdentifier(Context ctx) {
 }
 
 Value readValue(Context ctx) {
-  int initialChar = ctx.currentCharacter();
+  dchar initialChar = ctx.currentCharacter();
   switch (initialChar) {
     case '0': .. case '9': case '-': case '+': case '.':
       return ctx.readNumber();
@@ -184,15 +187,15 @@ Value readValue(Context ctx) {
 }
 
 Value readNumber(Context ctx) {
-  uint startpos = ctx.position;
+  size_t startpos = ctx.position;
 
   switch (ctx.currentCharacter()) {
     case '+': case '-': ctx.skip(); break;
     default:
   }
 
-  uint countBeforePoint = ctx.skipMembers(CharSet.Num);
-  uint countAfterPoint = 0;
+  size_t countBeforePoint = ctx.skipMembers(CharSet.Num);
+  size_t countAfterPoint = 0;
   if (ctx.currentCharacter() == '.') {
     ctx.skip();
     countAfterPoint = ctx.skipMembers(CharSet.Num);
@@ -231,7 +234,7 @@ Value readString(Context ctx) {
   ctx.skip();
 
   string valueString;
-  for (int c; (c = ctx.currentCharacter()) != '"'; ctx.skip()) {
+  for (dchar c; (c = ctx.currentCharacter()) != '"'; ctx.skip()) {
     if (c == EOFCharacter) {
       ctx.raiseParsingError("premature end of string");
     } else if (c == '\\') {
@@ -299,12 +302,12 @@ Value maybeReadBoolean(Context ctx) {
 }
 
 bool atBeginningOfIdentifier(Context ctx) {
-  int initialChar = ctx.currentCharacter();
+  dchar initialChar = ctx.currentCharacter();
   return initialChar.isMember(CharSet.Alpha);
 }
 
 bool atBeginningOfValue(Context ctx) {
-  int initialChar = ctx.currentCharacter();
+  dchar initialChar = ctx.currentCharacter();
   return initialChar == '"' || initialChar.isMember(CharSet.Num) ||
       initialChar == '+' || initialChar == '-' || initialChar == '.' ||
       ctx.atBeginningOfBooleanLiteral();
@@ -322,45 +325,63 @@ bool atBeginningOfSymbol(Context ctx, string ident) {
        !sourceFrom[ident.length].isMember(CharSet.AlphaNum));
 }
 
-int characterAt(Context ctx, uint index) {
-  if (index >= ctx.source.length)
+dchar characterAt(Context ctx, size_t index, ref size_t bytesize) {
+  assert(index <= ctx.source.length);
+  if (index == ctx.source.length) {
+    bytesize = 0;
     return EOFCharacter;
-  return ctx.source[index];
+  }
+  size_t newindex = index;
+  dchar c = std.utf.decode(ctx.source, /+ref+/newindex);
+  bytesize = newindex - index;
+  return c;
 }
 
-int currentCharacter(Context ctx) {
-  return ctx.characterAt(ctx.position);
+dchar characterAt(Context ctx, size_t index) {
+  size_t bytesize;
+  return ctx.characterAt(index, /+ref+/bytesize);
+}
+
+dchar currentCharacter(Context ctx, ref size_t bytesize) {
+  return ctx.characterAt(ctx.position, bytesize);
+}
+
+dchar currentCharacter(Context ctx) {
+  size_t bytesize;
+  return ctx.currentCharacter(/+ref+/bytesize);
 }
 
 bool atEndOfFile(Context ctx) {
   return ctx.currentCharacter() == EOFCharacter;
 }
 
-string collectMembers(Context ctx, int set) {
-  uint n = 0;
-  for (; ctx.currentCharacter().isMember(set); ++n)
+string collectMembers(Context ctx, CharSet set) {
+  size_t startpos = ctx.position;
+  while (ctx.currentCharacter().isMember(set))
     ctx.skip();
-  return ctx.source[ctx.position - n..ctx.position];
+  return ctx.source[startpos..ctx.position];
 }
 
-uint skipMembers(Context ctx, int set) {
-  return cast(uint)ctx.collectMembers(set).length;
+size_t skipMembers(Context ctx, CharSet set) {
+  return ctx.collectMembers(set).length;
 }
 
-void skip(Context ctx, uint n = 1) {
+void skip(Context ctx, size_t n = 1) {
   while (n-- > 0) {
-    assert(ctx.position < ctx.source.length);
-    if (ctx.currentCharacter() == '\n') {
+    dchar c;
+    size_t csize;
+    c = ctx.currentCharacter(/+ref+/csize);
+    if (c == '\n') {
       ++ctx.line;
       ctx.column = 1;
     } else {
       ++ctx.column;
     }
-    ++ctx.position;
+    ctx.position += csize;
   }
 }
 
-bool isMember(int c, int set) {
+bool isMember(dchar c, CharSet set) {
   bool res = false;
   if (!res && (set & CharSet.Space))
     res = c == ' ';
@@ -392,14 +413,11 @@ void raiseUnexpectedCharacterForItem(Context ctx, string itemName) {
                         ctx.currentCharacter().characterRepresentation);
 }
 
-string characterRepresentation(int character) {
+string characterRepresentation(dchar character) {
   if (character == EOFCharacter) {
     return "<EOF>";
   } else {
-    char c = cast(char)cast(uint)character;
-    if (c.isPrintable)
-      return "'" ~ c ~ "'";
-    else
-      return character.to!string;
+    char[4] buf;
+    return cast(immutable)("'" ~ buf[0..std.utf.encode(buf, character)] ~ "'");
   }
 }
