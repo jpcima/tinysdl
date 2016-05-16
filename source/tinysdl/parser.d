@@ -332,7 +332,14 @@ dchar characterAt(Context ctx, size_t index, ref size_t bytesize) {
     return EOFCharacter;
   }
   size_t newindex = index;
-  dchar c = std.utf.decode(ctx.source, /+ref+/newindex);
+  dchar c;
+  try {
+    c = std.utf.decode(ctx.source, /+ref+/newindex);
+  } catch (std.utf.UTFException) {
+    throw new ParsingError(
+        format("encountered invalid Unicode at byte position %d",
+               ctx.position));
+  }
   bytesize = newindex - index;
   return c;
 }
@@ -417,7 +424,11 @@ string characterRepresentation(dchar character) {
   if (character == EOFCharacter) {
     return "<EOF>";
   } else {
-    char[4] buf;
-    return cast(immutable)("'" ~ buf[0..std.utf.encode(buf, character)] ~ "'");
+    if (std.utf.isValidDchar(character)) {
+      char[4] buf;
+      return format("'%s'", buf[0..std.utf.encode(buf, character)]);
+    } else {
+      return format("'\\U%08x'", character);
+    }
   }
 }
