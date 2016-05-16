@@ -27,8 +27,9 @@ template destructureChildren(A...) {
         foreach (Tag child; tag.children) {
           if (child.name == childname) {
             if (!targetAcceptsMultivalues!(A[1]) && count > 0)
-              format("children named `%s` occur multiple times in tag `%s`",
-                     childname, tag.name);
+              throw new DestructuringError(
+                  format("children named `%s` occur multiple times in tag `%s`",
+                         childname, tag.name));
             storeChild(child, args[1]);
             ++count;
           }
@@ -69,7 +70,7 @@ template destructureChildren(A...) {
   }
 
   bool targetAcceptsMultivalues(T)() {
-    static if (isPointer!T)
+    static if (is(T == Tag *))
       return false;
     else
       return true;

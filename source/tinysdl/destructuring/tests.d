@@ -177,4 +177,14 @@ unittest {
                             "aKnown", null);
     } catch (DestructuringError) {}
   }
+
+  // multivalues
+  { enum source = `t1; t1`;
+    Tag t1;
+    try {
+      destructureChildren(parse(source),
+                          option.required, "t1", &t1);
+      assert(0);
+    } catch (DestructuringError ex) { writeln(ex.msg); }
+  }
 }
