@@ -188,3 +188,95 @@ unittest {
     } catch (DestructuringError) {}
   }
 }
+
+// Value destructuring
+unittest {
+  // destructuring into variables
+  { enum source = `t1 "someText" 3.14 true`;
+    string v1;
+    double v2;
+    bool v3;
+    destructureValues(parse(source).child(0),
+                      &v1, &v2, &v3);
+    assert(v1 == "someText");
+    assert(v2 == 3.14);
+    assert(v3 == true);
+  }
+
+  // destructuring into functions
+  { enum source = `t1 "someText" 3.14 true`;
+    string v1;
+    double v2;
+    bool v3;
+    destructureValues(parse(source).child(0),
+                      delegate(string v) { v1 = v; },
+                      delegate(double v) { v2 = v; },
+                      delegate(bool v) { v3 = v; });
+    assert(v1 == "someText");
+    assert(v2 == 3.14);
+    assert(v3 == true);
+  }
+
+  // destructuring without storing
+  { enum source = `t1 "someText" 3.14 true`;
+    destructureValues(parse(source).child(0),
+                      null, null, null);
+  }
+
+  // destructuring with rest into variables
+  { enum source = `t1 "someText" 3.14 true 1 2 3`;
+    string v1;
+    double v2;
+    bool v3;
+    int[] rest;
+    destructureValues(parse(source).child(0),
+                      &v1, &v2, &v3,
+                      option.rest, &rest);
+    assert(v1 == "someText");
+    assert(v2 == 3.14);
+    assert(v3 == true);
+    assert(rest == [1, 2, 3]);
+  }
+
+  // destructuring with rest into functions
+  { enum source = `t1 "someText" 3.14 true 1 2 3`;
+    string v1;
+    double v2;
+    bool v3;
+    int[] rest;
+    destructureValues(parse(source).child(0),
+                      delegate(string v) { v1 = v; },
+                      delegate(double v) { v2 = v; },
+                      delegate(bool v) { v3 = v; },
+                      option.rest, delegate(int v) { rest ~= v; });
+    assert(v1 == "someText");
+    assert(v2 == 3.14);
+    assert(v3 == true);
+    assert(rest == [1, 2, 3]);
+  }
+
+  // destructuring with rest without storing
+  { enum source = `t1 "someText" 3.14 true 1 2 3`;
+    destructureValues(parse(source).child(0),
+                      null, null, null,
+                      option.rest, null);
+  }
+
+  // too many elements
+  { enum source = `t1 1 2`;
+    try {
+      destructureValues(parse(source).child(0),
+                        null);
+      assert(0);
+    } catch (DestructuringError) {}
+  }
+
+  // too few elements
+  { enum source = `t1 1 2`;
+    try {
+      destructureValues(parse(source).child(0),
+                        null, null, null);
+      assert(0);
+    } catch (DestructuringError) {}
+  }
+}
