@@ -1,12 +1,18 @@
 module tinysdl.errors;
 
-class ValueError: Exception {
+class SdlException: Exception {
   this(A...)(A args) {
     super(args);
   }
 }
 
-class ParsingError: Exception {
+class ValueError: SdlException {
+  this(A...)(A args) {
+    super(args);
+  }
+}
+
+class ParsingError: SdlException {
   this(A...)(A args) {
     super(args);
   }
