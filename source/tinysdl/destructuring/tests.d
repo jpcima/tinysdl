@@ -185,6 +185,6 @@ unittest {
       destructureChildren(parse(source),
                           option.required, "t1", &t1);
       assert(0);
-    } catch (DestructuringError ex) { writeln(ex.msg); }
+    } catch (DestructuringError) {}
   }
 }
